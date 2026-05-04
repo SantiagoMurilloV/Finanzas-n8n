@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Finanzas · Demo n8n</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="aurora"></div>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo-dot"></span>
+      <h1>Finanzas <small>· demo n8n</small></h1>
+    </div>
+    <div class="topbar-right">
+      <div class="status">
+        <span id="conn-dot" class="dot off"></span>
+        <span id="conn-text">Conectando…</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- ============ ENDPOINT PARA N8N ============ -->
+    <section class="card endpoint-card">
+      <div class="card-head">
+        <div>
+          <h2>Endpoint para tu n8n</h2>
+          <p class="muted small">Pegá esta URL en el nodo HTTP Request de n8n.</p>
+        </div>
+        <span class="badge" id="auth-badge">sin token</span>
+      </div>
+
+      <div class="endpoint-row">
+        <span class="method">POST</span>
+        <code id="endpoint-url">cargando…</code>
+        <button id="btn-copy-url" class="btn">Copiar</button>
+      </div>
+
+      <details class="json-sample">
+        <summary>Body JSON de ejemplo</summary>
+<pre id="json-sample">cargando…</pre>
+        <button id="btn-copy-json" class="btn small">Copiar JSON</button>
+      </details>
+    </section>
+
+    <!-- ============ KPIs ============ -->
+    <section class="kpis">
+      <div class="kpi balance">
+        <div class="kpi-icon">◈</div>
+        <span class="kpi-label">Balance</span>
+        <span class="kpi-value" id="kpi-balance">$0</span>
+        <span class="kpi-trend" id="kpi-balance-trend"></span>
+      </div>
+      <div class="kpi ingresos">
+        <div class="kpi-icon">↑</div>
+        <span class="kpi-label">Ingresos</span>
+        <span class="kpi-value" id="kpi-ingresos">$0</span>
+        <span class="kpi-trend" id="kpi-ingresos-sub">0 movimientos</span>
+      </div>
+      <div class="kpi gastos">
+        <div class="kpi-icon">↓</div>
+        <span class="kpi-label">Gastos</span>
+        <span class="kpi-value" id="kpi-gastos">$0</span>
+        <span class="kpi-trend" id="kpi-gastos-sub">0 movimientos</span>
+      </div>
+      <div class="kpi ahorro">
+        <div class="kpi-icon">%</div>
+        <span class="kpi-label">Tasa de ahorro</span>
+        <span class="kpi-value" id="kpi-ahorro">0%</span>
+        <span class="kpi-trend" id="kpi-ahorro-sub">sin datos</span>
+      </div>
+    </section>
+
+    <!-- ============ META DE AHORRO ============ -->
+    <section class="card meta-card">
+      <div class="card-head">
+        <div>
+          <h2>Meta de ahorro</h2>
+          <p class="muted small">Definí cuánto querés ahorrar y mirá tu progreso.</p>
+        </div>
+        <button id="btn-edit-meta" class="btn ghost small">Editar meta</button>
+      </div>
+
+      <div class="meta-content">
+        <div class="meta-numbers">
+          <div>
+            <span class="meta-label">Ahorrado</span>
+            <span class="meta-actual" id="meta-actual">$0</span>
+          </div>
+          <div class="meta-divider">/</div>
+          <div>
+            <span class="meta-label">Meta</span>
+            <span class="meta-target" id="meta-target">sin meta</span>
+          </div>
+        </div>
+        <div class="progress">
+          <div class="progress-bar" id="progress-bar" style="width: 0%"></div>
+          <span class="progress-text" id="progress-text">0%</span>
+        </div>
+        <p class="muted small" id="meta-msg">Definí una meta para empezar a hacer seguimiento.</p>
+      </div>
+    </section>
+
+    <!-- ============ GRÁFICOS ============ -->
+    <section class="charts-grid">
+      <div class="card chart-card">
+        <div class="card-head">
+          <h2>Ingresos vs Gastos</h2>
+          <span class="muted small">últimos 14 días</span>
+        </div>
+        <div class="chart-wrap">
+          <canvas id="chart-serie"></canvas>
+        </div>
+      </div>
+
+      <div class="card chart-card">
+        <div class="card-head">
+          <h2>Gastos por categoría</h2>
+          <span class="muted small" id="cat-total-label"></span>
+        </div>
+        <div class="chart-wrap">
+          <canvas id="chart-categorias"></canvas>
+        </div>
+        <div id="legend-categorias" class="legend"></div>
+      </div>
+    </section>
+
+    <!-- ============ INSIGHTS / SALUD FINANCIERA ============ -->
+    <section class="card insights-card">
+      <div class="card-head">
+        <h2>Salud financiera</h2>
+        <span class="badge" id="salud-badge">sin datos</span>
+      </div>
+
+      <div class="salud-bar-wrap">
+        <div class="salud-bar" id="salud-bar" style="width: 0%"></div>
+      </div>
+
+      <div class="insights-grid">
+        <div class="insight">
+          <span class="insight-label">Promedio diario</span>
+          <span class="insight-value" id="ins-prom-gasto">$0</span>
+          <span class="insight-sub">de gasto</span>
+        </div>
+        <div class="insight">
+          <span class="insight-label">Día más caro</span>
+          <span class="insight-value" id="ins-dia-caro">—</span>
+          <span class="insight-sub" id="ins-dia-caro-sub"></span>
+        </div>
+        <div class="insight">
+          <span class="insight-label">Top categoría</span>
+          <span class="insight-value" id="ins-top-cat">—</span>
+          <span class="insight-sub" id="ins-top-cat-sub"></span>
+        </div>
+        <div class="insight">
+          <span class="insight-label">Proyección 30d</span>
+          <span class="insight-value" id="ins-proy">$0</span>
+          <span class="insight-sub">balance estimado</span>
+        </div>
+        <div class="insight">
+          <span class="insight-label">Mayor gasto</span>
+          <span class="insight-value" id="ins-mayor-g">—</span>
+          <span class="insight-sub" id="ins-mayor-g-sub"></span>
+        </div>
+        <div class="insight">
+          <span class="insight-label">Mayor ingreso</span>
+          <span class="insight-value" id="ins-mayor-i">—</span>
+          <span class="insight-sub" id="ins-mayor-i-sub"></span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ ÚLTIMOS MOVIMIENTOS ============ -->
+    <section class="card">
+      <div class="card-head">
+        <h2>Últimos movimientos</h2>
+        <button id="btn-reset" class="btn danger small">Limpiar todo</button>
+      </div>
+      <div id="empty" class="empty">
+        Esperando que llegue el primer movimiento desde n8n…<br />
+        <small>Mandale un mensaje al bot, ej: <em>compré un almuerzo de 50</em></small>
+      </div>
+      <ul id="lista" class="lista"></ul>
+    </section>
+  </main>
+
+  <!-- ============ MODAL META ============ -->
+  <div class="modal-backdrop" id="modal-backdrop">
+    <div class="modal">
+      <h3>Definí tu meta de ahorro</h3>
+      <p class="muted small">¿Cuánto querés ahorrar en total?</p>
+      <input type="number" id="meta-input" min="0" step="50" placeholder="Ej: 1000" />
+      <div class="modal-actions">
+        <button class="btn ghost" id="modal-cancel">Cancelar</button>
+        <button class="btn" id="modal-save">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <small>n8n course demo · santiagomurilloval</small>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js"></script>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>

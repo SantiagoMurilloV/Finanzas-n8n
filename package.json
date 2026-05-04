@@ -1,0 +1,21 @@
+{
+  "name": "finanzas-demo",
+  "version": "1.0.0",
+  "description": "Dashboard de finanzas en vivo para demos de n8n + Telegram (curso gratuito)",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.5.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.1",
+    "socket.io": "^4.8.1"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

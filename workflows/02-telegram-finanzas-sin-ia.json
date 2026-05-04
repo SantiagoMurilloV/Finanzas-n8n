@@ -1,0 +1,169 @@
+{
+  "name": "Telegram → Finanzas (sin IA, comandos)",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": ["message"]
+      },
+      "id": "a1c2e0f0-1111-4222-9222-111111111111",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 300],
+      "webhookId": "REPLACE_WEBHOOK_ID",
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parsea mensajes tipo (montos en COP):\n//   gasto 25000 almuerzo\n//   ingreso 2500000 sueldo\n//   gasto 25k almuerzo  (k = mil)\n//   gasto 1.5M arriendo (M = millón)\n//\n// Formato: <tipo> <monto> <descripcion...> [#categoria]\n\nconst tg = $json.message;\nconst text = String(tg.text || '').trim();\nconst parts = text.split(/\\s+/);\n\nconst tipoRaw = parts[0]?.toLowerCase();\nconst tipo = ['gasto', 'gaste', 'gasté', 'pago', 'compra'].includes(tipoRaw)\n  ? 'gasto'\n  : ['ingreso', 'cobro', 'sueldo', 'cobré'].includes(tipoRaw)\n  ? 'ingreso'\n  : null;\n\nif (!tipo) {\n  return [{ json: { _ignore: true, _reason: 'comando inválido', _help: 'Usá: gasto 25000 almuerzo  |  ingreso 2500000 sueldo' } }];\n}\n\n// Parsear monto con sufijos colombianos: 25k = 25000, 1.5M = 1500000\nfunction parseMonto(raw) {\n  if (!raw) return NaN;\n  const m = String(raw).toLowerCase().replace(/[\\.,]/g, (c, i, s) => {\n    // Mantener punto solo si es decimal (1.5M); quitar separadores de miles\n    return c === '.' && /\\d/.test(s[i + 1] || '') ? '.' : '';\n  });\n  const match = m.match(/^([0-9]*\\.?[0-9]+)\\s*([km]?)$/);\n  if (!match) return Number(raw);\n  const n = parseFloat(match[1]);\n  if (match[2] === 'k') return n * 1000;\n  if (match[2] === 'm') return n * 1000000;\n  return n;\n}\n\nconst monto = parseMonto(parts[1]);\nif (!Number.isFinite(monto) || monto <= 0) {\n  return [{ json: { _ignore: true, _reason: 'monto inválido' } }];\n}\n\n// El resto es descripción; si hay palabra con # → categoría\nlet descripcion = parts.slice(2).join(' ');\nlet categoria = 'otros';\nconst hash = descripcion.match(/#(\\w+)/);\nif (hash) {\n  categoria = hash[1].toLowerCase();\n  descripcion = descripcion.replace(/#\\w+/, '').trim();\n} else {\n  // Heurística simple por keywords (contexto Colombia)\n  const map = {\n    comida: ['almuerzo', 'cena', 'desayuno', 'pizza', 'restaurante', 'mercado', 'tinto', 'corrientazo'],\n    transporte: ['uber', 'didi', 'taxi', 'bus', 'gasolina', 'transmilenio', 'metro', 'sitp'],\n    ocio: ['cine', 'fiesta', 'salida', 'bar', 'rumba'],\n    salud: ['farmacia', 'medicina', 'doctor', 'eps'],\n    hogar: ['arriendo', 'alquiler', 'luz', 'agua', 'internet', 'gas', 'administracion'],\n    sueldo: ['sueldo', 'salario', 'nomina', 'nómina', 'quincena'],\n    freelance: ['freelance', 'cliente', 'proyecto', 'factura'],\n  };\n  for (const [cat, keys] of Object.entries(map)) {\n    if (keys.some(k => descripcion.toLowerCase().includes(k))) { categoria = cat; break; }\n  }\n}\n\nreturn [{\n  json: {\n    tipo,\n    monto: Math.round(monto),\n    categoria,\n    descripcion: descripcion || tipo,\n    usuario: tg.from?.username ? '@' + tg.from.username : tg.from?.first_name,\n    raw_text: tg.text,\n  }\n}];"
+      },
+      "id": "b2c2e0f0-2222-4222-9222-222222222222",
+      "name": "Parsear comando",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [520, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": false, "typeValidation": "loose" },
+          "conditions": [
+            {
+              "leftValue": "={{ $json._ignore }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "true", "singleValue": true }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "c3c2e0f0-3333-4222-9222-333333333333",
+      "name": "¿Comando inválido?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [780, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://TU-DASHBOARD.com/api/movimientos",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "e5c2e0f0-5555-4222-9222-555555555555",
+      "name": "POST → Dashboard",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1060, 420]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').first().json.message.chat.id }}",
+        "text": "=Listo ✓\\n{{ $('Parsear comando').first().json.tipo === 'gasto' ? '−' : '+' }} {{ $('Parsear comando').first().json.monto }} en *{{ $('Parsear comando').first().json.categoria }}*",
+        "additionalFields": { "parse_mode": "Markdown" }
+      },
+      "id": "f6c2e0f0-6666-4222-9222-666666666666",
+      "name": "Responder OK",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1320, 420],
+      "credentials": {
+        "telegramApi": { "id": "REPLACE", "name": "Telegram account" }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').first().json.message.chat.id }}",
+        "text": "Comando inválido. Usá (montos en COP):\\n  `gasto 25000 almuerzo`\\n  `ingreso 2500000 sueldo`",
+        "additionalFields": { "parse_mode": "Markdown" }
+      },
+      "id": "g7c2e0f0-7777-4222-9222-777777777777",
+      "name": "Responder ayuda",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1060, 180],
+      "credentials": {
+        "telegramApi": { "id": "REPLACE", "name": "Telegram account" }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "REPLACE_CON_TU_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Movimientos",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "fecha":       "={{ $now.toFormat('yyyy-MM-dd HH:mm:ss') }}",
+            "tipo":        "={{ $('Parsear comando').first().json.tipo }}",
+            "monto":       "={{ $('Parsear comando').first().json.monto }}",
+            "categoria":   "={{ $('Parsear comando').first().json.categoria }}",
+            "descripcion": "={{ $('Parsear comando').first().json.descripcion }}",
+            "usuario":     "={{ $('Parsear comando').first().json.usuario }}",
+            "raw_text":    "={{ $('Parsear comando').first().json.raw_text }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            { "id": "fecha",       "displayName": "fecha",       "type": "string", "canBeUsedToMatch": true },
+            { "id": "tipo",        "displayName": "tipo",        "type": "string", "canBeUsedToMatch": true },
+            { "id": "monto",       "displayName": "monto",       "type": "number", "canBeUsedToMatch": true },
+            { "id": "categoria",   "displayName": "categoria",   "type": "string", "canBeUsedToMatch": true },
+            { "id": "descripcion", "displayName": "descripcion", "type": "string", "canBeUsedToMatch": true },
+            { "id": "usuario",     "displayName": "usuario",     "type": "string", "canBeUsedToMatch": true },
+            { "id": "raw_text",    "displayName": "raw_text",    "type": "string", "canBeUsedToMatch": true }
+          ]
+        },
+        "options": {}
+      },
+      "id": "h8c2e0f0-8888-4222-9222-888888888888",
+      "name": "Google Sheets: Append",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [1580, 420],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Telegram Trigger": {
+      "main": [[{ "node": "Parsear comando", "type": "main", "index": 0 }]]
+    },
+    "Parsear comando": {
+      "main": [[{ "node": "¿Comando inválido?", "type": "main", "index": 0 }]]
+    },
+    "¿Comando inválido?": {
+      "main": [
+        [{ "node": "Responder ayuda", "type": "main", "index": 0 }],
+        [{ "node": "POST → Dashboard", "type": "main", "index": 0 }]
+      ]
+    },
+    "POST → Dashboard": {
+      "main": [[{ "node": "Responder OK", "type": "main", "index": 0 }]]
+    },
+    "Responder OK": {
+      "main": [[{ "node": "Google Sheets: Append", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "active": false,
+  "tags": []
+}

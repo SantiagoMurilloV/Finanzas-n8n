@@ -1,0 +1,170 @@
+{
+  "name": "Telegram → Finanzas (con IA)",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": ["message"]
+      },
+      "id": "a1c2e0f0-1111-4111-9111-111111111111",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 300],
+      "webhookId": "REPLACE_WEBHOOK_ID",
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.message.text }}",
+        "options": {
+          "systemMessage": "# ROL\nSos un parser financiero personal para Colombia. Tu trabajo es leer un mensaje de texto en español que un usuario le manda a un bot de Telegram, y extraer la información estructurada del movimiento financiero (gasto o ingreso).\n\n# SALIDA OBLIGATORIA\nDevolvés EXCLUSIVAMENTE un JSON válido con esta estructura exacta:\n{\n  \"tipo\": \"gasto\" | \"ingreso\",\n  \"monto\": <número entero en COP, sin separadores>,\n  \"categoria\": \"<una palabra de la lista permitida>\",\n  \"descripcion\": \"<descripción corta del movimiento, máximo 60 caracteres>\"\n}\n\nNO escribas texto antes o después del JSON. NO uses bloques de código (```json). NO comentes. NO saludes.\n\n# CATEGORÍAS PERMITIDAS\nSolo una de estas, en minúsculas, sin tildes:\ncomida, transporte, sueldo, freelance, ocio, salud, hogar, otros.\n\n# DETECCIÓN DEL TIPO\n- TIPO 'gasto' (sale plata): compré, pagué, gasté, me cobraron, salió, costó, retiré.\n- TIPO 'ingreso' (entra plata): cobré, me pagaron, me llegó, recibí, sueldo, salario, quincena, me transfirieron, me consignaron, me cayó.\n- Si no es claro, asumí 'gasto'.\n\n# INTERPRETACIÓN DEL MONTO (Colombia tiene expresiones específicas)\nConvertí SIEMPRE a número entero en COP, sin separadores ni decimales.\n\nReglas:\n- '25 mil' / '25mil' / '25k' → 25000\n- '1 millón' / '1M' → 1000000\n- '1.5 millones' / '1.5M' / 'millón y medio' → 1500000\n- 'medio millón' → 500000\n- '2 lucas' → 2000 (lucas = miles en Colombia)\n- '50 lucas' → 50000\n- '$50.000' / '50.000 pesos' → 50000 (los puntos son separadores de miles, NO decimales)\n- 'tres mil' → 3000\n- 'doscientos mil' → 200000\n\nSi el usuario no menciona monto, devolvé monto = 0.\n\n# ELECCIÓN DE CATEGORÍA\nPor defecto: 'otros'. Mapeo:\n- comida: almuerzo, desayuno, cena, mercado, comida, restaurante, pizza, hamburguesa, corrientazo, tinto, café, panadería, domicilio, rappi, ifood.\n- transporte: uber, didi, indriver, taxi, bus, transmilenio, sitp, metro, mio, gasolina, peaje, parqueadero.\n- ocio: cine, fiesta, rumba, bar, salida, concierto, gimnasio, gym, netflix, spotify, disney, hbo.\n- salud: farmacia, droguería, medicina, doctor, médico, eps, hospital, terapia, dentista, examen.\n- hogar: arriendo, alquiler, administración, servicios, luz, agua, gas, internet, claro, etb, movistar, tigo.\n- sueldo: sueldo, salario, nómina, quincena.\n- freelance: cliente, proyecto, factura, freelance, contrato, asesoría, consultoría.\n\n# DESCRIPCIÓN\nFrase corta (máx 60 chars) que resuma el movimiento. Sin verbos innecesarios. Sin el monto.\n- 'compré un almuerzo de 25 mil' → 'almuerzo'\n- 'me pagaron el sueldo de mayo, 3 millones' → 'sueldo de mayo'\n- 'gasté 12 mil en uber al trabajo' → 'uber al trabajo'\n\n# MENSAJES NO FINANCIEROS\nSi es saludo, pregunta o cualquier cosa no relacionada con plata, devolvé monto = 0:\n{\"tipo\": \"gasto\", \"monto\": 0, \"categoria\": \"otros\", \"descripcion\": \"<texto recortado>\"}\nUn monto 0 será ignorado por el flujo aguas abajo.\n\n# EJEMPLOS\n\nMensaje: 'compré un almuerzo de 25 mil'\n{\"tipo\": \"gasto\", \"monto\": 25000, \"categoria\": \"comida\", \"descripcion\": \"almuerzo\"}\n\nMensaje: 'me llegó el sueldo, 3.5M'\n{\"tipo\": \"ingreso\", \"monto\": 3500000, \"categoria\": \"sueldo\", \"descripcion\": \"sueldo\"}\n\nMensaje: 'gasté 12k en uber'\n{\"tipo\": \"gasto\", \"monto\": 12000, \"categoria\": \"transporte\", \"descripcion\": \"uber\"}\n\nMensaje: 'pagué el arriendo, 1.5 millones'\n{\"tipo\": \"gasto\", \"monto\": 1500000, \"categoria\": \"hogar\", \"descripcion\": \"arriendo\"}\n\nMensaje: 'me pagó un cliente 800 mil del proyecto'\n{\"tipo\": \"ingreso\", \"monto\": 800000, \"categoria\": \"freelance\", \"descripcion\": \"proyecto cliente\"}\n\nMensaje: 'salí a comer 50 lucas'\n{\"tipo\": \"gasto\", \"monto\": 50000, \"categoria\": \"comida\", \"descripcion\": \"salida a comer\"}\n\nMensaje: 'transmilenio 3 mil'\n{\"tipo\": \"gasto\", \"monto\": 3000, \"categoria\": \"transporte\", \"descripcion\": \"transmilenio\"}\n\nMensaje: 'hola'\n{\"tipo\": \"gasto\", \"monto\": 0, \"categoria\": \"otros\", \"descripcion\": \"hola\"}\n\n# FINAL\nSOLO el objeto JSON. Sin markdown. Sin texto extra."
+        }
+      },
+      "id": "b2c2e0f0-2222-4111-9111-222222222222",
+      "name": "AI Agent (extraer JSON)",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [520, 300]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "options": {}
+      },
+      "id": "c3c2e0f0-3333-4111-9111-333333333333",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [520, 480],
+      "credentials": {
+        "openAiApi": {
+          "id": "REPLACE",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Limpia la respuesta del agente y agrega contexto del Telegram\nconst raw = $json.output ?? $json.text ?? '';\n\n// Extraer el JSON aunque venga rodeado de texto\nconst match = String(raw).match(/\\{[\\s\\S]*\\}/);\nlet parsed = {};\ntry { parsed = JSON.parse(match ? match[0] : raw); } catch (e) { parsed = {}; }\n\nconst tg = $('Telegram Trigger').first().json.message;\n\nreturn [{\n  json: {\n    tipo: parsed.tipo || 'gasto',\n    monto: Number(parsed.monto) || 0,\n    categoria: (parsed.categoria || 'otros').toLowerCase(),\n    descripcion: parsed.descripcion || tg.text,\n    usuario: tg.from?.username ? '@' + tg.from.username : tg.from?.first_name,\n    raw_text: tg.text,\n  }\n}];"
+      },
+      "id": "d4c2e0f0-4444-4111-9111-444444444444",
+      "name": "Normalizar JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [820, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://TU-DASHBOARD.com/api/movimientos",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "e5c2e0f0-5555-4111-9111-555555555555",
+      "name": "POST → Dashboard",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1080, 300]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').first().json.message.chat.id }}",
+        "text": "=Listo {{ $('Normalizar JSON').first().json.usuario || '' }} ✓\\n{{ $('Normalizar JSON').first().json.tipo === 'gasto' ? '−' : '+' }} {{ $('Normalizar JSON').first().json.monto }} en *{{ $('Normalizar JSON').first().json.categoria }}*",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "f6c2e0f0-6666-4111-9111-666666666666",
+      "name": "Responder a Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1340, 300],
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "REPLACE_CON_TU_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Movimientos",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "fecha":       "={{ $now.toFormat('yyyy-MM-dd HH:mm:ss') }}",
+            "tipo":        "={{ $('Normalizar JSON').first().json.tipo }}",
+            "monto":       "={{ $('Normalizar JSON').first().json.monto }}",
+            "categoria":   "={{ $('Normalizar JSON').first().json.categoria }}",
+            "descripcion": "={{ $('Normalizar JSON').first().json.descripcion }}",
+            "usuario":     "={{ $('Normalizar JSON').first().json.usuario }}",
+            "raw_text":    "={{ $('Normalizar JSON').first().json.raw_text }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            { "id": "fecha",       "displayName": "fecha",       "type": "string", "canBeUsedToMatch": true },
+            { "id": "tipo",        "displayName": "tipo",        "type": "string", "canBeUsedToMatch": true },
+            { "id": "monto",       "displayName": "monto",       "type": "number", "canBeUsedToMatch": true },
+            { "id": "categoria",   "displayName": "categoria",   "type": "string", "canBeUsedToMatch": true },
+            { "id": "descripcion", "displayName": "descripcion", "type": "string", "canBeUsedToMatch": true },
+            { "id": "usuario",     "displayName": "usuario",     "type": "string", "canBeUsedToMatch": true },
+            { "id": "raw_text",    "displayName": "raw_text",    "type": "string", "canBeUsedToMatch": true }
+          ]
+        },
+        "options": {}
+      },
+      "id": "h8c2e0f0-8888-4111-9111-888888888888",
+      "name": "Google Sheets: Append",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [1600, 300],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Telegram Trigger": {
+      "main": [[{ "node": "AI Agent (extraer JSON)", "type": "main", "index": 0 }]]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [[{ "node": "AI Agent (extraer JSON)", "type": "ai_languageModel", "index": 0 }]]
+    },
+    "AI Agent (extraer JSON)": {
+      "main": [[{ "node": "Normalizar JSON", "type": "main", "index": 0 }]]
+    },
+    "Normalizar JSON": {
+      "main": [[{ "node": "POST → Dashboard", "type": "main", "index": 0 }]]
+    },
+    "POST → Dashboard": {
+      "main": [[{ "node": "Responder a Telegram", "type": "main", "index": 0 }]]
+    },
+    "Responder a Telegram": {
+      "main": [[{ "node": "Google Sheets: Append", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "active": false,
+  "tags": []
+}
