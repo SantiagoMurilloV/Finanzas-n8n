@@ -14,6 +14,7 @@
 require('dotenv').config();
 
 const path = require('path');
+const fs = require('fs');
 const http = require('http');
 const express = require('express');
 const cors = require('cors');
@@ -22,11 +23,25 @@ const Database = require('better-sqlite3');
 
 // ---------- Config ----------
 const PORT = Number(process.env.PORT) || 3000;
-const PUBLIC_URL = process.env.PUBLIC_URL || `http://localhost:${PORT}`;
 const API_TOKEN = process.env.API_TOKEN || ''; // vacío = sin auth (modo clase)
+// DATA_DIR permite redirigir la DB a un volumen persistente (Railway, Fly, etc.)
+const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 
-// ---------- DB (SQLite, archivo único en ./data) ----------
-const dbPath = path.join(__dirname, 'data', 'finanzas.db');
+// PUBLIC_URL: detección automática según el proveedor de hosting.
+// Prioridad: variable explícita > Railway > Render > Fly > localhost.
+function detectPublicUrl() {
+  if (process.env.PUBLIC_URL) return process.env.PUBLIC_URL.replace(/\/$/, '');
+  if (process.env.RAILWAY_PUBLIC_DOMAIN) return `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`;
+  if (process.env.RAILWAY_STATIC_URL) return process.env.RAILWAY_STATIC_URL.replace(/\/$/, '');
+  if (process.env.RENDER_EXTERNAL_URL) return process.env.RENDER_EXTERNAL_URL.replace(/\/$/, '');
+  if (process.env.FLY_APP_NAME) return `https://${process.env.FLY_APP_NAME}.fly.dev`;
+  return `http://localhost:${PORT}`;
+}
+const PUBLIC_URL = detectPublicUrl();
+
+// ---------- DB (SQLite, archivo único en DATA_DIR) ----------
+if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+const dbPath = path.join(DATA_DIR, 'finanzas.db');
 const db = new Database(dbPath);
 db.pragma('journal_mode = WAL');
 

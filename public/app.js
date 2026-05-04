@@ -455,3 +455,13 @@ cargarEndpointInfo();
 
 // Refrescar tiempos relativos cada 30s
 setInterval(() => { if (state.ultimos) renderLista(); }, 30000);
+
+// ---------- PWA: registrar service worker ----------
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker
+      .register('/service-worker.js')
+      .then((reg) => console.log('[PWA] SW registrado:', reg.scope))
+      .catch((err) => console.warn('[PWA] SW falló:', err));
+  });
+}

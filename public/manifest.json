@@ -1,0 +1,27 @@
+{
+  "name": "Finanzas · n8n Demo",
+  "short_name": "Finanzas",
+  "description": "Dashboard de finanzas en vivo para clase de n8n",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#050816",
+  "theme_color": "#0a0f24",
+  "lang": "es-CO",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/icon-512.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "categories": ["finance", "productivity", "education"]
+}

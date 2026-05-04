@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <linearGradient id="bg-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6c8cff"/>
+      <stop offset="55%" stop-color="#7c6cff"/>
+      <stop offset="100%" stop-color="#8b5cf6"/>
+    </linearGradient>
+    <linearGradient id="line-grad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#22d3ee"/>
+      <stop offset="100%" stop-color="#34d399"/>
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="6" result="b"/>
+      <feMerge>
+        <feMergeNode in="b"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Fondo redondeado -->
+  <rect width="512" height="512" rx="112" fill="url(#bg-grad)"/>
+
+  <!-- Brillo decorativo en esquina -->
+  <circle cx="380" cy="120" r="120" fill="white" fill-opacity="0.08"/>
+
+  <!-- Eje base -->
+  <line x1="80" y1="400" x2="432" y2="400" stroke="white" stroke-opacity="0.18" stroke-width="4" stroke-linecap="round"/>
+
+  <!-- Línea de tendencia ascendente -->
+  <path d="M 90 380 L 180 320 L 250 348 L 330 220 L 420 170"
+        stroke="url(#line-grad)"
+        stroke-width="32"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        filter="url(#glow)"/>
+
+  <!-- Punto destacado al final -->
+  <circle cx="420" cy="170" r="26" fill="white"/>
+  <circle cx="420" cy="170" r="13" fill="#34d399"/>
+</svg>

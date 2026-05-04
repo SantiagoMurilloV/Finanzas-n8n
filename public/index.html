@@ -2,8 +2,19 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Finanzas · Demo n8n</title>
+
+  <!-- PWA -->
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="theme-color" content="#0a0f24" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Finanzas" />
+  <link rel="icon" type="image/svg+xml" href="/logo.svg" />
+  <link rel="apple-touch-icon" href="/icon-512.svg" />
+
+  <!-- Fuentes -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -14,7 +25,7 @@
 
   <header class="topbar">
     <div class="brand">
-      <span class="logo-dot"></span>
+      <img src="/logo.svg" alt="Finanzas" class="logo" />
       <h1>Finanzas <small>· demo n8n</small></h1>
     </div>
     <div class="topbar-right">
@@ -26,28 +37,38 @@
   </header>
 
   <main>
-    <!-- ============ ENDPOINT PARA N8N ============ -->
-    <section class="card endpoint-card">
-      <div class="card-head">
-        <div>
-          <h2>Endpoint para tu n8n</h2>
-          <p class="muted small">Pegá esta URL en el nodo HTTP Request de n8n.</p>
+    <!-- ============ ENDPOINT PARA N8N (colapsable) ============ -->
+    <details class="card endpoint-card" id="endpoint-card">
+      <summary class="endpoint-summary">
+        <div class="endpoint-summary-left">
+          <span class="endpoint-icon" aria-hidden="true">⚡</span>
+          <div>
+            <h2>Endpoint para tu n8n</h2>
+            <p class="muted small endpoint-summary-sub">
+              Pegá esta URL en el nodo HTTP Request · clic para ver
+            </p>
+          </div>
         </div>
-        <span class="badge" id="auth-badge">sin token</span>
-      </div>
+        <div class="endpoint-summary-right">
+          <span class="badge" id="auth-badge">sin token</span>
+          <span class="chevron" aria-hidden="true">▾</span>
+        </div>
+      </summary>
 
-      <div class="endpoint-row">
-        <span class="method">POST</span>
-        <code id="endpoint-url">cargando…</code>
-        <button id="btn-copy-url" class="btn">Copiar</button>
-      </div>
+      <div class="endpoint-body">
+        <div class="endpoint-row">
+          <span class="method">POST</span>
+          <code id="endpoint-url">cargando…</code>
+          <button id="btn-copy-url" class="btn">Copiar</button>
+        </div>
 
-      <details class="json-sample">
-        <summary>Body JSON de ejemplo</summary>
+        <details class="json-sample">
+          <summary>Body JSON de ejemplo</summary>
 <pre id="json-sample">cargando…</pre>
-        <button id="btn-copy-json" class="btn small">Copiar JSON</button>
-      </details>
-    </section>
+          <button id="btn-copy-json" class="btn small">Copiar JSON</button>
+        </details>
+      </div>
+    </details>
 
     <!-- ============ KPIs ============ -->
     <section class="kpis">
@@ -204,7 +225,7 @@
   </div>
 
   <footer>
-    <small>n8n course demo · santiagomurilloval</small>
+    <small>n8n course demo · ING. Santiago Murillo Valencia</small>
   </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js"></script>
