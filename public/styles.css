@@ -1150,13 +1150,17 @@ footer {
   }
   .month-picker {
     min-width: 0;
-    width: 100%;
-    max-width: 260px;
+    width: auto;
+    max-width: 170px;
     align-self: flex-start;
   }
+  .month-picker span {
+    font-size: 9px;
+  }
   .month-picker input {
-    font-size: 15px;
-    padding: 10px 12px;
+    font-size: 12px;
+    padding: 7px 10px;
+    border-radius: 9px;
   }
   .ahorro-notes {
     grid-template-columns: 1fr;
