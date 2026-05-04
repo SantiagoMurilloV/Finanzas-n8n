@@ -86,14 +86,49 @@ code, pre, .mono { font-family: 'JetBrains Mono', ui-monospace, "SF Mono", Menlo
   gap: 16px;
   position: relative;
 }
-.brand { display: flex; align-items: center; gap: 12px; }
+.brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.brand-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  line-height: 1.1;
+}
 .brand h1 {
   font-size: 20px;
   font-weight: 700;
   letter-spacing: -0.03em;
   font-family: var(--display);
+  line-height: 1.1;
 }
 .brand h1 small { color: var(--muted); font-weight: 500; font-size: 13px; }
+.brand-tagline {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.brand-tagline-code {
+  font-family: 'JetBrains Mono', ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--accent);
+  background: rgba(108, 140, 255, 0.12);
+  border: 1px solid rgba(108, 140, 255, 0.25);
+  padding: 1px 5px;
+  border-radius: 5px;
+  letter-spacing: 0;
+}
+@media (max-width: 540px) {
+  .brand-tagline { font-size: 10.5px; }
+  .brand-tagline-code { font-size: 10px; padding: 1px 4px; }
+}
 
 .logo {
   width: 36px; height: 36px;
@@ -515,6 +550,7 @@ code, pre, .mono { font-family: 'JetBrains Mono', ui-monospace, "SF Mono", Menlo
   flex-direction: column;
   gap: 5px;
   min-width: 148px;
+  max-width: 100%;
 }
 .month-picker span,
 .formula-label,
@@ -527,12 +563,18 @@ code, pre, .mono { font-family: 'JetBrains Mono', ui-monospace, "SF Mono", Menlo
 }
 .month-picker input {
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   background: rgba(8, 12, 28, 0.78);
   border: 1px solid var(--border-strong);
   color: var(--text);
   border-radius: 12px;
   padding: 9px 12px;
   font: inherit;
+  font-size: 14px;
+  -webkit-appearance: none;
+  appearance: none;
 }
 .month-picker input:focus {
   outline: none;
@@ -1095,6 +1137,9 @@ footer {
     flex-direction: column;
     align-items: stretch;
   }
+  .ahorro-head {
+    gap: 14px;
+  }
   .movimientos-actions {
     width: 100%;
     justify-content: space-between;
@@ -1105,6 +1150,13 @@ footer {
   }
   .month-picker {
     min-width: 0;
+    width: 100%;
+    max-width: 260px;
+    align-self: flex-start;
+  }
+  .month-picker input {
+    font-size: 15px;
+    padding: 10px 12px;
   }
   .ahorro-notes {
     grid-template-columns: 1fr;
