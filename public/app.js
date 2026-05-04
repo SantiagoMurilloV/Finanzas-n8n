@@ -1,40 +1,247 @@
 // =====================================================================
-//  Cliente del dashboard - WebSocket + Chart.js + insights
+//  Cliente del dashboard - Almacenamiento LOCAL por dispositivo
+//  - Cada dispositivo guarda su propio state en localStorage.
+//  - Los movimientos llegan por WebSocket desde n8n.
+//  - El server NO es la fuente de verdad: solo broadcastea entradas nuevas.
 // =====================================================================
 
 const $ = (sel) => document.querySelector(sel);
+const STORAGE_KEY = 'finanzas-demo-state-v1';
 
-let state = {};
 let chartSerie = null;
 let chartCategorias = null;
 
 // Paleta para categorías (hasta 8 colores rotativos)
 const PALETTE = ['#6c8cff', '#8b5cf6', '#22d3ee', '#34d399', '#f59e0b', '#f87171', '#ec4899', '#a78bfa'];
 
+// =====================================================================
+//  ALMACENAMIENTO LOCAL
+// =====================================================================
+
+const Storage = {
+  defaults: () => ({ movimientos: [], meta_ahorro: 0, next_id: 1 }),
+
+  load() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return Storage.defaults();
+      const s = JSON.parse(raw);
+      return {
+        movimientos: Array.isArray(s.movimientos) ? s.movimientos : [],
+        meta_ahorro: Number(s.meta_ahorro) || 0,
+        next_id: Number(s.next_id) || 1,
+      };
+    } catch (e) {
+      return Storage.defaults();
+    }
+  },
+
+  save(s) {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); } catch (e) {}
+  },
+
+  add(s, mov) {
+    const m = {
+      ...mov,
+      id: mov.id || s.next_id,
+      created_at: mov.created_at || new Date().toISOString(),
+    };
+    // Evitar duplicados (si llega el mismo id por reconexión)
+    if (!s.movimientos.find((x) => x.id === m.id && x.created_at === m.created_at)) {
+      s.movimientos.unshift(m);
+      s.next_id = Math.max(s.next_id, m.id) + 1;
+    }
+    Storage.save(s);
+    return s;
+  },
+
+  remove(s, id) {
+    s.movimientos = s.movimientos.filter((m) => m.id !== id);
+    Storage.save(s);
+    return s;
+  },
+
+  reset(s) {
+    s.movimientos = [];
+    s.next_id = 1;
+    Storage.save(s);
+    return s;
+  },
+
+  setMeta(s, monto) {
+    s.meta_ahorro = Number(monto) || 0;
+    Storage.save(s);
+    return s;
+  },
+};
+
+// =====================================================================
+//  CÁLCULOS DE INSIGHTS (todo client-side)
+// =====================================================================
+
+function rellenarSerie(movimientos, dias = 14) {
+  const map = {};
+  for (const m of movimientos) {
+    const dia = (m.created_at || new Date().toISOString()).slice(0, 10);
+    if (!map[dia]) map[dia] = { ingresos: 0, gastos: 0 };
+    if (m.tipo === 'ingreso') map[dia].ingresos += Number(m.monto) || 0;
+    else map[dia].gastos += Number(m.monto) || 0;
+  }
+  const out = [];
+  const hoy = new Date();
+  for (let i = dias - 1; i >= 0; i--) {
+    const d = new Date(hoy);
+    d.setUTCDate(d.getUTCDate() - i);
+    const key = d.toISOString().slice(0, 10);
+    const r = map[key] || { ingresos: 0, gastos: 0 };
+    out.push({
+      dia: key,
+      ingresos: r.ingresos,
+      gastos: r.gastos,
+      balance_dia: r.ingresos - r.gastos,
+    });
+  }
+  return out;
+}
+
+function porCategoria(movimientos) {
+  const m = {};
+  for (const x of movimientos) {
+    const k = `${x.categoria}|${x.tipo}`;
+    if (!m[k]) m[k] = { categoria: x.categoria, tipo: x.tipo, total: 0, n: 0 };
+    m[k].total += Number(x.monto) || 0;
+    m[k].n += 1;
+  }
+  return Object.values(m).sort((a, b) => b.total - a.total);
+}
+
+function calcularSnapshot(state) {
+  const { movimientos, meta_ahorro } = state;
+
+  const ingresos = movimientos
+    .filter((m) => m.tipo === 'ingreso')
+    .reduce((a, b) => a + (Number(b.monto) || 0), 0);
+  const gastos = movimientos
+    .filter((m) => m.tipo === 'gasto')
+    .reduce((a, b) => a + (Number(b.monto) || 0), 0);
+  const balance = ingresos - gastos;
+
+  const cats = porCategoria(movimientos);
+  const serie = rellenarSerie(movimientos, 14);
+
+  const tasaAhorro = ingresos > 0 ? Math.max(0, (balance / ingresos) * 100) : 0;
+  const diasConDatos = new Set(
+    serie.filter((d) => d.ingresos > 0 || d.gastos > 0).map((d) => d.dia)
+  ).size;
+  const dias = Math.max(1, diasConDatos);
+  const promG = gastos / dias;
+  const promI = ingresos / dias;
+
+  let diaMasCaro = null;
+  let maxGastoDia = 0;
+  for (const d of serie) {
+    if (d.gastos > maxGastoDia) {
+      maxGastoDia = d.gastos;
+      diaMasCaro = d.dia;
+    }
+  }
+
+  const gastosPorCat = cats.filter((c) => c.tipo === 'gasto');
+  const topCat = gastosPorCat[0] || null;
+  const totalGastoCats = gastosPorCat.reduce((a, b) => a + b.total, 0) || 1;
+  const topCatsPct = gastosPorCat.slice(0, 6).map((c) => ({
+    categoria: c.categoria,
+    total: c.total,
+    n: c.n,
+    porcentaje: (c.total / totalGastoCats) * 100,
+  }));
+
+  let mayorGasto = null;
+  let mayorIngreso = null;
+  for (const m of movimientos) {
+    if (m.tipo === 'gasto' && (!mayorGasto || Number(m.monto) > Number(mayorGasto.monto))) mayorGasto = m;
+    if (m.tipo === 'ingreso' && (!mayorIngreso || Number(m.monto) > Number(mayorIngreso.monto))) mayorIngreso = m;
+  }
+
+  let saludScore = 0;
+  let saludLabel = 'sin datos';
+  if (ingresos > 0) {
+    if (balance < 0) { saludScore = 15; saludLabel = 'gastando más de lo que entra'; }
+    else if (tasaAhorro < 10) { saludScore = 40; saludLabel = 'ahorro bajo'; }
+    else if (tasaAhorro < 20) { saludScore = 65; saludLabel = 'ahorro saludable'; }
+    else if (tasaAhorro < 35) { saludScore = 85; saludLabel = 'muy bien'; }
+    else { saludScore = 95; saludLabel = 'excelente'; }
+  }
+
+  return {
+    ingresos,
+    gastos,
+    balance,
+    total_movimientos: movimientos.length,
+    ultimos: movimientos.slice(0, 20),
+    por_categoria: cats,
+    serie_diaria: serie,
+    meta_ahorro,
+    progreso_meta: meta_ahorro > 0 ? Math.max(0, Math.min(100, (balance / meta_ahorro) * 100)) : 0,
+    insights: {
+      tasa_ahorro: Number(tasaAhorro.toFixed(1)),
+      promedio_diario_gasto: Number(promG.toFixed(2)),
+      promedio_diario_ingreso: Number(promI.toFixed(2)),
+      dias_con_datos: diasConDatos,
+      dia_mas_caro: diaMasCaro,
+      monto_dia_mas_caro: maxGastoDia,
+      mayor_gasto: mayorGasto,
+      mayor_ingreso: mayorIngreso,
+      top_categoria_gasto: topCat ? { categoria: topCat.categoria, total: topCat.total } : null,
+      top_categorias_gasto_pct: topCatsPct,
+      proyeccion_gasto_30d: promG * 30,
+      proyeccion_ingreso_30d: promI * 30,
+      proyeccion_ahorro_30d: (promI - promG) * 30,
+      salud_score: saludScore,
+      salud_label: saludLabel,
+    },
+  };
+}
+
+// =====================================================================
+//  ESTADO Y RENDER
+// =====================================================================
+
+let state = Storage.load();
+let snapshot = calcularSnapshot(state);
+
+function recalc() {
+  snapshot = calcularSnapshot(state);
+  renderAll();
+}
+
 // ---------- Helpers ----------
 const fmt = (n) =>
   new Intl.NumberFormat('es-CO', {
-    style: 'currency', currency: 'COP',
+    style: 'currency',
+    currency: 'COP',
     maximumFractionDigits: 0,
   }).format(n || 0);
 
 const fmtPct = (n) => `${(Number(n) || 0).toFixed(1)}%`;
 
 const tiempoRel = (iso) => {
-  const t = new Date(iso + 'Z').getTime();
+  if (!iso) return '';
+  const t = new Date(iso).getTime();
   const diff = Math.max(0, (Date.now() - t) / 1000);
   if (diff < 5) return 'justo ahora';
   if (diff < 60) return `hace ${Math.floor(diff)}s`;
   if (diff < 3600) return `hace ${Math.floor(diff / 60)}min`;
   if (diff < 86400) return `hace ${Math.floor(diff / 3600)}h`;
-  return new Date(iso + 'Z').toLocaleDateString('es-CO', { day: 'numeric', month: 'short' });
+  return new Date(iso).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' });
 };
 
 const fmtFecha = (yyyymmdd) => {
   if (!yyyymmdd) return '—';
   const [y, m, d] = yyyymmdd.split('-');
   return new Date(Number(y), Number(m) - 1, Number(d)).toLocaleDateString('es-CO', {
-    day: 'numeric', month: 'short',
+    day: 'numeric',
+    month: 'short',
   });
 };
 
@@ -59,14 +266,14 @@ function toast(msg) {
 
 // ---------- Render: KPIs ----------
 function renderKPIs() {
-  $('#kpi-balance').textContent = fmt(state.balance);
-  $('#kpi-ingresos').textContent = fmt(state.ingresos);
-  $('#kpi-gastos').textContent = fmt(state.gastos);
-  $('#kpi-ahorro').textContent = fmtPct(state.insights?.tasa_ahorro);
+  $('#kpi-balance').textContent = fmt(snapshot.balance);
+  $('#kpi-ingresos').textContent = fmt(snapshot.ingresos);
+  $('#kpi-gastos').textContent = fmt(snapshot.gastos);
+  $('#kpi-ahorro').textContent = fmtPct(snapshot.insights?.tasa_ahorro);
 
-  const i = state.insights || {};
+  const i = snapshot.insights || {};
   $('#kpi-balance-trend').textContent =
-    state.balance >= 0 ? '✓ en positivo' : '⚠ en negativo';
+    snapshot.balance > 0 ? '✓ en positivo' : snapshot.balance < 0 ? '⚠ en negativo' : 'sin datos';
   $('#kpi-ingresos-sub').textContent = `proy. 30d: ${fmt(i.proyeccion_ingreso_30d)}`;
   $('#kpi-gastos-sub').textContent = `proy. 30d: ${fmt(i.proyeccion_gasto_30d)}`;
   $('#kpi-ahorro-sub').textContent = i.salud_label || 'sin datos';
@@ -74,9 +281,9 @@ function renderKPIs() {
 
 // ---------- Render: Meta de ahorro ----------
 function renderMeta() {
-  const meta = state.meta_ahorro || 0;
-  const ahorrado = state.balance || 0;
-  const pct = state.progreso_meta || 0;
+  const meta = snapshot.meta_ahorro || 0;
+  const ahorrado = snapshot.balance || 0;
+  const pct = snapshot.progreso_meta || 0;
 
   $('#meta-actual').textContent = fmt(ahorrado);
   $('#meta-target').textContent = meta > 0 ? fmt(meta) : 'sin meta';
@@ -98,9 +305,8 @@ function renderMeta() {
 
 // ---------- Render: Insights ----------
 function renderInsights() {
-  const i = state.insights || {};
+  const i = snapshot.insights || {};
 
-  // Salud bar
   $('#salud-bar').style.width = `${i.salud_score || 0}%`;
   $('#salud-badge').textContent = i.salud_label || 'sin datos';
 
@@ -140,9 +346,9 @@ function renderInsights() {
 
 // ---------- Render: Charts ----------
 function renderChartSerie() {
-  const serie = state.serie_diaria || [];
+  const serie = snapshot.serie_diaria || [];
   const labels = serie.map((d) => {
-    const [y, m, dd] = d.dia.split('-');
+    const [, m, dd] = d.dia.split('-');
     return `${dd}/${m}`;
   });
   const ingresos = serie.map((d) => d.ingresos);
@@ -198,7 +404,7 @@ function renderChartSerie() {
 }
 
 function renderChartCategorias() {
-  const cats = state.insights?.top_categorias_gasto_pct || [];
+  const cats = snapshot.insights?.top_categorias_gasto_pct || [];
   const labels = cats.map((c) => c.categoria);
   const data = cats.map((c) => c.total);
   const colors = labels.map((_, i) => PALETTE[i % PALETTE.length]);
@@ -226,7 +432,6 @@ function renderChartCategorias() {
     });
   }
 
-  // Total y leyenda manual
   const total = data.reduce((a, b) => a + b, 0);
   $('#cat-total-label').textContent = total > 0 ? `total ${fmt(total)}` : '';
 
@@ -262,17 +467,10 @@ function chartLineOptions() {
       tooltip: tooltipStyle(),
     },
     scales: {
-      x: {
-        grid: { color: 'rgba(108, 140, 255, 0.08)' },
-        ticks: { color: '#7e87b3', font: { size: 11 } },
-      },
+      x: { grid: { color: 'rgba(108, 140, 255, 0.08)' }, ticks: { color: '#7e87b3', font: { size: 11 } } },
       y: {
         grid: { color: 'rgba(108, 140, 255, 0.08)' },
-        ticks: {
-          color: '#7e87b3',
-          font: { size: 11 },
-          callback: (v) => fmt(v),
-        },
+        ticks: { color: '#7e87b3', font: { size: 11 }, callback: (v) => fmt(v) },
         beginAtZero: true,
       },
     },
@@ -286,12 +484,7 @@ function chartDoughnutOptions() {
     cutout: '65%',
     plugins: {
       legend: { display: false },
-      tooltip: {
-        ...tooltipStyle(),
-        callbacks: {
-          label: (ctx) => `${ctx.label}: ${fmt(ctx.parsed)}`,
-        },
-      },
+      tooltip: { ...tooltipStyle(), callbacks: { label: (ctx) => `${ctx.label}: ${fmt(ctx.parsed)}` } },
     },
   };
 }
@@ -320,13 +513,13 @@ function renderLista() {
   const empty = $('#empty');
   ul.innerHTML = '';
 
-  if (!state.ultimos?.length) {
+  if (!snapshot.ultimos?.length) {
     empty.style.display = 'block';
     return;
   }
   empty.style.display = 'none';
 
-  for (const m of state.ultimos) {
+  for (const m of snapshot.ultimos) {
     const li = document.createElement('li');
     li.className = `mov ${m.tipo}`;
     li.innerHTML = `
@@ -345,9 +538,8 @@ function renderLista() {
   }
 }
 
-// ---------- Render: Apply snapshot ----------
-function aplicarSnapshot(s) {
-  state = s;
+// ---------- Render: All ----------
+function renderAll() {
   renderKPIs();
   renderMeta();
   renderInsights();
@@ -356,7 +548,9 @@ function aplicarSnapshot(s) {
   renderLista();
 }
 
-// ---------- Endpoint info ----------
+// =====================================================================
+//  ENDPOINT INFO (lo único que pide al server)
+// =====================================================================
 async function cargarEndpointInfo() {
   try {
     const r = await fetch('/api/endpoint-info');
@@ -365,12 +559,15 @@ async function cargarEndpointInfo() {
     $('#json-sample').textContent = JSON.stringify(info.body_ejemplo, null, 2);
     $('#auth-badge').textContent = info.requiere_token ? 'requiere token' : 'sin token';
 
-    $('#btn-copy-url').onclick = async () => {
+    $('#btn-copy-url').onclick = async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
       await navigator.clipboard.writeText(info.url);
       toast('Endpoint copiado');
     };
     $('#btn-copy-json').onclick = async (e) => {
       e.preventDefault();
+      e.stopPropagation();
       await navigator.clipboard.writeText(JSON.stringify(info.body_ejemplo, null, 2));
       toast('JSON copiado');
     };
@@ -379,7 +576,11 @@ async function cargarEndpointInfo() {
   }
 }
 
-// ---------- Modal Meta de ahorro ----------
+// =====================================================================
+//  ACCIONES (todo local, no toca el server)
+// =====================================================================
+
+// Modal Meta de ahorro
 function abrirModalMeta() {
   const backdrop = $('#modal-backdrop');
   const input = $('#meta-input');
@@ -394,17 +595,14 @@ $('#modal-cancel').addEventListener('click', cerrarModal);
 $('#modal-backdrop').addEventListener('click', (e) => {
   if (e.target.id === 'modal-backdrop') cerrarModal();
 });
-$('#modal-save').addEventListener('click', async () => {
+$('#modal-save').addEventListener('click', () => {
   const monto = Number($('#meta-input').value);
   if (!Number.isFinite(monto) || monto < 0) {
     toast('Monto inválido');
     return;
   }
-  await fetch('/api/meta-ahorro', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ monto }),
-  });
+  state = Storage.setMeta(state, monto);
+  recalc();
   cerrarModal();
   toast(monto > 0 ? `Meta: ${fmt(monto)}` : 'Meta eliminada');
 });
@@ -413,22 +611,27 @@ $('#meta-input').addEventListener('keydown', (e) => {
   if (e.key === 'Escape') cerrarModal();
 });
 
-// ---------- Acciones lista ----------
-$('#lista').addEventListener('click', async (e) => {
+// Borrar movimiento individual (solo local)
+$('#lista').addEventListener('click', (e) => {
   const btn = e.target.closest('.mov-del');
   if (!btn) return;
-  const id = btn.dataset.id;
-  if (!confirm('¿Borrar este movimiento?')) return;
-  await fetch(`/api/movimientos/${id}`, { method: 'DELETE' });
+  const id = Number(btn.dataset.id);
+  if (!confirm('¿Borrar este movimiento de este dispositivo?')) return;
+  state = Storage.remove(state, id);
+  recalc();
 });
 
-$('#btn-reset').addEventListener('click', async () => {
-  if (!confirm('Vas a borrar TODOS los movimientos. ¿Seguro?')) return;
-  await fetch('/api/reset', { method: 'POST' });
-  toast('Todo limpio');
+// Limpiar todo (solo local)
+$('#btn-reset').addEventListener('click', () => {
+  if (!confirm('Vas a borrar TODOS los movimientos guardados en este dispositivo. ¿Seguro?')) return;
+  state = Storage.reset(state);
+  recalc();
+  toast('Almacenamiento local limpio');
 });
 
-// ---------- Socket ----------
+// =====================================================================
+//  SOCKET — recibe movimientos nuevos del server y los guarda en local
+// =====================================================================
 const socket = io();
 
 socket.on('connect', () => {
@@ -439,24 +642,32 @@ socket.on('disconnect', () => {
   $('#conn-dot').classList.replace('on', 'off');
   $('#conn-text').textContent = 'Desconectado';
 });
-socket.on('hidratar', aplicarSnapshot);
-socket.on('nuevo-movimiento', ({ snapshot, movimiento }) => {
-  aplicarSnapshot(snapshot);
+
+// Cuando llega un movimiento nuevo desde n8n -> guardarlo en este dispositivo
+socket.on('nuevo-movimiento', ({ movimiento }) => {
+  if (!movimiento || !movimiento.tipo) return;
+  state = Storage.add(state, movimiento);
+  recalc();
   toast(
     `${movimiento.tipo === 'gasto' ? '↓' : '↑'} ${fmt(movimiento.monto)} · ${movimiento.categoria}`
   );
 });
-socket.on('movimiento-borrado', ({ snapshot }) => aplicarSnapshot(snapshot));
-socket.on('reset', ({ snapshot }) => { aplicarSnapshot(snapshot); toast('Reset'); });
-socket.on('meta-actualizada', ({ snapshot }) => aplicarSnapshot(snapshot));
 
-// ---------- Init ----------
+// Eventos legacy del server (movimiento-borrado, reset, meta-actualizada, hidratar)
+// se ignoran a propósito: cada dispositivo es dueño de su propio estado local.
+
+// =====================================================================
+//  INIT
+// =====================================================================
 cargarEndpointInfo();
+renderAll();
 
 // Refrescar tiempos relativos cada 30s
-setInterval(() => { if (state.ultimos) renderLista(); }, 30000);
+setInterval(() => { if (snapshot.ultimos?.length) renderLista(); }, 30000);
 
-// ---------- PWA: registrar service worker ----------
+// =====================================================================
+//  PWA: registrar service worker
+// =====================================================================
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker
